@@ -3,6 +3,7 @@ namespace DbSync\Http\Controllers;
 
 use DbSync\Core\SyncEngine;
 use DbSync\Core\ConfigResolver;
+use DbSync\Core\AuthResolver;
 
 class SyncController {
     private $engine;
@@ -13,14 +14,65 @@ class SyncController {
     }
 
     /**
-     * Halaman Dashboard Sinkronisasi
+     * Halaman Login Dashboard
+     */
+    public function login() {
+        $routePrefix = ConfigResolver::getEnv('DB_SYNC_PREFIX', 'db-sync');
+        $basePath = '/' . trim($routePrefix, '/');
+
+        // Jika sudah login, langsung lempar ke dashboard
+        if (AuthResolver::isAuthenticated()) {
+            header("Location: {$basePath}");
+            exit;
+        }
+
+        $errorMessage = '';
+        $csrf = ConfigResolver::getCsrfToken();
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $username = (string)($_POST['username'] ?? '');
+            $password = (string)($_POST['password'] ?? '');
+
+            if (AuthResolver::attemptBuiltinLogin($username, $password)) {
+                header("Location: {$basePath}");
+                exit;
+            } else {
+                $errorMessage = 'Username atau Password tidak valid. Silakan periksa pengaturan .env Anda.';
+            }
+        }
+
+        require __DIR__ . '/../../Views/login.php';
+    }
+
+    /**
+     * Logout Session Dashboard
+     */
+    public function logout() {
+        AuthResolver::logout();
+        $routePrefix = ConfigResolver::getEnv('DB_SYNC_PREFIX', 'db-sync');
+        $basePath = '/' . trim($routePrefix, '/');
+        header("Location: {$basePath}/login");
+        exit;
+    }
+
+    /**
+     * Halaman Utama Dashboard Sinkronisasi
      */
     public function index() {
-        $tables = $this->engine->getTables();
         $routePrefix = ConfigResolver::getEnv('DB_SYNC_PREFIX', 'db-sync');
+        $basePath = '/' . trim($routePrefix, '/');
+
+        // Proteksi autentikasi
+        if (!AuthResolver::isAuthenticated()) {
+            header("Location: {$basePath}/login");
+            exit;
+        }
+
+        $tables = $this->engine->getTables();
         $csrf = ConfigResolver::getCsrfToken();
         $remoteUrl = ConfigResolver::getEnv('DB_SYNC_REMOTE_URL', '');
         $hasKey = !empty(ConfigResolver::getEnv('DB_SYNC_SECRET_KEY', ''));
+        $userName = AuthResolver::getUserName();
 
         require __DIR__ . '/../../Views/index.php';
     }
@@ -30,6 +82,16 @@ class SyncController {
      */
     public function process() {
         header('Content-Type: application/json');
+
+        // Proteksi autentikasi untuk request AJAX
+        if (!AuthResolver::isAuthenticated()) {
+            http_response_code(401);
+            echo json_encode([
+                'status'  => 'error',
+                'message' => 'Unauthorized: Sesi Anda telah berakhir atau Anda belum login.'
+            ]);
+            return;
+        }
 
         $tables = $_POST['tables'] ?? [];
         $directions = $_POST['direction'] ?? [];

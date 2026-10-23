@@ -21,13 +21,18 @@
 <body class="p-3 p-md-4">
 <div class="container-fluid max-w-1200" style="max-width: 1100px;">
     <!-- Header -->
-    <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3 pb-2 border-bottom">
         <div>
             <h4 class="mb-0 text-dark fw-bold"><i class="bi bi-arrow-repeat text-primary me-2"></i>Database Synchronization Dashboard</h4>
             <small class="text-muted">Kelola dan sinkronkan tabel database lokal dan remote secara aman</small>
         </div>
-        <div>
-            <span class="badge bg-secondary">v1.0.0</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-light text-dark border px-2 py-2">
+                <i class="bi bi-person-circle text-primary me-1"></i><?= htmlspecialchars($userName ?? 'Admin') ?>
+            </span>
+            <a href="<?= '/' . trim($routePrefix, '/') ?>/logout" class="btn btn-outline-danger btn-sm" title="Keluar dari sesi dashboard">
+                <i class="bi bi-box-arrow-right me-1"></i>Logout
+            </a>
         </div>
     </div>
 
@@ -220,7 +225,6 @@ async function startSync() {
     const formData = new FormData(form);
     const btn = document.getElementById('btnStart');
 
-    // UI Loading state
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sinkronisasi Berjalan...';
     
@@ -244,6 +248,13 @@ async function startSync() {
             body: formData,
             headers: headers
         });
+
+        if (response.status === 401) {
+            appendLog('Sesi telah berakhir atau Anda belum login. Silakan refresh halaman untuk login kembali.', true);
+            alert('Sesi login telah berakhir. Silakan login kembali.');
+            window.location.href = routePrefix + '/login';
+            return;
+        }
 
         const data = await response.json();
 
